@@ -183,7 +183,8 @@ static const CONF_PARSER migrate_config[] = {
 	{ FR_CONF_OFFSET("flatten_before_encode", FR_TYPE_BOOL | FR_TYPE_HIDDEN, main_config_t, flatten_before_encode) },
 	{ FR_CONF_OFFSET("tmpl_tokenize_all_nested", FR_TYPE_BOOL | FR_TYPE_HIDDEN, main_config_t, tmpl_tokenize_all_nested) },
 	{ FR_CONF_OFFSET("parse_new_conditions", FR_TYPE_BOOL | FR_TYPE_HIDDEN, main_config_t, parse_new_conditions) },
-	{ FR_CONF_OFFSET("use_new_conditions", FR_TYPE_BOOL | FR_TYPE_HIDDEN, main_config_t, use_new_conditions) },
+	{ FR_CONF_POINTER("pair_nested", FR_TYPE_BOOL | FR_TYPE_HIDDEN, &fr_pair_nested) },
+
 	CONF_PARSER_TERMINATOR
 };
 
@@ -1440,11 +1441,16 @@ void main_config_hup(main_config_t *config)
 }
 
 static fr_table_num_ordered_t config_arg_table[] = {
-	{ L("parse_new_conditions"),	 offsetof(main_config_t, parse_new_conditions) },
+	{ L("parse_new_conditions"),	 offsetof(main_config_t, parse_new_conditions), },
 	{ L("use_new_conditions"),	 offsetof(main_config_t, use_new_conditions) },
 	{ L("tmpl_tokenize_all_nested"), offsetof(main_config_t, tmpl_tokenize_all_nested) },
 };
 static size_t config_arg_table_len = NUM_ELEMENTS(config_arg_table);
+
+static fr_table_ptr_ordered_t config_arg_ptr_table[] = {
+	{ L("pair_nested"),	 	&fr_pair_nested, },
+};
+static size_t config_arg_ptr_table_len = NUM_ELEMENTS(config_arg_ptr_table);
 
 /*
  *	Migration function that allows for command-line over-ride of
@@ -1457,13 +1463,19 @@ int main_config_parse_option(char const *value)
 {
 	fr_value_box_t box;
 	size_t offset;
+	bool *out;
 	char const *p;
 
 	p = strchr(value, '=');
 	if (!p) return -1;
 
 	offset = fr_table_value_by_substr(config_arg_table, value, p - value, 0);
-	if (!offset) return -1;
+	if (offset) {
+		out = (bool *) (((uintptr_t) main_config) + offset);
+	} else {
+		out = fr_table_value_by_substr(config_arg_ptr_table, value, p - value, 0);
+		if (!out) return -1;
+	}
 
 	p += 1;
 
@@ -1474,7 +1486,7 @@ int main_config_parse_option(char const *value)
 		fr_exit(1);
 	}
 
-       *(bool *) (((uintptr_t) main_config) + offset) = box.vb_bool;
+	*out = box.vb_bool;
 
 	return 0;
 }

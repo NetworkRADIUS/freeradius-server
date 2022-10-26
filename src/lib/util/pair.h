@@ -828,6 +828,11 @@ void		fr_pair_ctx_reset(fr_pair_ctx_t *pair_ctx, fr_dict_t const *dict) CC_HINT(
 void		fr_fprintf_pair(FILE *fp, char const *msg, fr_pair_t const *vp);
 void		fr_fprintf_pair_list(FILE *fp, fr_pair_list_t const *list);
 
+/*
+ *	Transitional flag.
+ */
+extern bool	fr_pair_nested;
+
 #undef _CONST
 #ifdef __cplusplus
 }

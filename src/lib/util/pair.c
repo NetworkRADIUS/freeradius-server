@@ -37,6 +37,8 @@ FR_TLIST_FUNCS(fr_pair_order_list, fr_pair_t, order_entry)
 
 #include <freeradius-devel/util/pair_inline.c>
 
+bool fr_pair_nested = false;
+
 /** Initialise a pair list header
  *
  * @param[in,out] list to initialise
@@ -1086,6 +1088,26 @@ fr_pair_t *_fr_pair_dcursor_by_ancestor_init(fr_dcursor_t *cursor,
 					     fr_pair_list_t const *list, fr_dict_attr_t const *da,
 					     bool is_const)
 {
+	/*
+	 *	If the pairs can be nested, then find the VP which matches the DA.
+	 *
+	 *	If the VP exists, then we just loop over its children,
+	 *	instead of worrying about common parentage.
+	 */
+	if (fr_pair_nested) {
+		fr_pair_t const *vp;
+
+		vp = fr_pair_find_by_da_nested(list, NULL, da);
+		if (vp) {
+			list = &vp->vp_group;
+
+			return _fr_dcursor_init(cursor, fr_pair_order_list_dlist_head(&list->order),
+						NULL, NULL, NULL,
+						_pair_list_dcursor_insert, _pair_list_dcursor_remove, list, is_const);
+		}
+	}
+
+
 	return _fr_dcursor_init(cursor, fr_pair_order_list_dlist_head(&list->order),
 				fr_pair_iter_next_by_ancestor, NULL, da,
 				_pair_list_dcursor_insert, _pair_list_dcursor_remove, list, is_const);
