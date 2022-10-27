@@ -46,7 +46,7 @@ test.keywords.help: TEST_KEYWORDS_HELP += test.keywords.${1}
 ifneq "$(findstring ${1}, paircmp)" ""
 $(OUTPUT)/${1}: NEW_COND=-S parse_new_conditions=no -S use_new_conditions=no
 else
-$(OUTPUT)/${1}: NEW_COND=-S parse_new_conditions=yes -S use_new_conditions=yes
+$(OUTPUT)/${1}: NEW_COND=-S parse_new_conditions=yes -S use_new_conditions=yes -S tmpl_tokenize_all_nested=yes -S pair_nested=true
 endif
 
 endef

@@ -542,6 +542,7 @@ static int apply_edits_to_leaf(request_t *request, unlang_frame_state_edit_t *st
 		 *	LHS, and then discover that we need to delete it.
 		 */
 		fr_strerror_clear();
+
 		vp = tmpl_dcursor_build_init(&err, state, &lhs_cc, &lhs_cursor, request, current->lhs.vpt, edit_list_pair_build, current);
 		tmpl_dcursor_clear(&lhs_cc);
 		if (!vp) {
@@ -551,6 +552,7 @@ static int apply_edits_to_leaf(request_t *request, unlang_frame_state_edit_t *st
 
 		fr_assert(current->lhs.vp_parent != NULL);
 		fr_assert(fr_type_is_structural(current->lhs.vp_parent->da->type));
+		fr_assert(!fr_type_is_structural(vp->da->type));
 
 		/*
 		 *	There's always at least one LHS vp created.  So we apply that first.
@@ -566,7 +568,7 @@ static int apply_edits_to_leaf(request_t *request, unlang_frame_state_edit_t *st
 
 		if (single) goto done;
 
-		/*
+ 		/*
 		 *	Loop over the remaining items, adding the VPs we've just created.
 		 */
 		while ((box = fr_dcursor_next(&cursor)) != NULL) {
@@ -1232,6 +1234,18 @@ static unlang_action_t process_edit(rlm_rcode_t *p_result, request_t *request, u
 	while (state->current) {
 		while (state->current->map) {
 			int rcode;
+
+			if (state->current->map->rhs) {
+				RDEBUG3("Edit applying %s %s %s",
+					state->current->map->lhs->name,
+					fr_tokens[state->current->map->op],
+					state->current->map->rhs->name);
+
+			} else {
+				RDEBUG3("Edit applying %s %s { ... }",
+					state->current->map->lhs->name,
+					fr_tokens[state->current->map->op]);
+			}
 
 			rcode = state->current->func(request, state, state->current);
 			if (rcode < 0) {
