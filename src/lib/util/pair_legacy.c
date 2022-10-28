@@ -206,18 +206,36 @@ static ssize_t fr_pair_list_afrom_substr(TALLOC_CTX *ctx, fr_dict_attr_t const *
 		fr_skip_whitespace(p);
 
 		/*
+		 *	Create the VP and add it to the list.
+		 */
+		vp = fr_pair_afrom_da(my_ctx, da);
+		if (!vp) goto error;
+		vp->op = raw.op;
+
+		/*
+		 *	Free the unknown attribute, as we don't need
+		 *	it any more.  Then reset the current da to the
+		 *	one from the VP, which is the permanent one to
+		 *	be using.
+		 */
+		fr_dict_unknown_free(&da);
+		da = vp->da;
+
+		fr_assert(vp != NULL);
+		fr_pair_append(my_list, vp);
+
+		/*
 		 *	Allow grouping attributes.
 		 */
 		switch (da->type) {
 		case FR_TYPE_NON_LEAF:
 			if (*p != '{') {
 				fr_strerror_printf("Group list for %s MUST start with '{'", da->name);
+			error_vp:
+				fr_pair_remove(my_list, vp);
 				goto error;
 			}
 			p++;
-
-			vp = fr_pair_afrom_da(my_ctx, da);
-			if (!vp) goto error;
 
 			/*
 			 *	Parse nested attributes, but the
@@ -227,15 +245,13 @@ static ssize_t fr_pair_list_afrom_substr(TALLOC_CTX *ctx, fr_dict_attr_t const *
 			my_relative_vp = NULL;
 			slen = fr_pair_list_afrom_substr(vp, vp->da, p, end, &vp->vp_group, &last_token, depth + 1, &my_relative_vp);
 			if (slen <= 0) {
-				talloc_free(vp);
-				goto error;
+				goto error_vp;
 			}
 
 			if (last_token != T_RCBRACE) {
 			failed_group:
 				fr_strerror_const("Failed to end group list with '}'");
-				talloc_free(vp);
-				goto error;
+				goto error_vp;
 			}
 
 			p += slen;
@@ -257,7 +273,7 @@ static ssize_t fr_pair_list_afrom_substr(TALLOC_CTX *ctx, fr_dict_attr_t const *
 			quote = gettoken(&p, raw.r_opand, sizeof(raw.r_opand), false);
 			if (quote == T_EOL) {
 				fr_strerror_const("Failed to get value");
-				goto error;
+				goto error_vp;
 			}
 
 			switch (quote) {
@@ -269,8 +285,9 @@ static ssize_t fr_pair_list_afrom_substr(TALLOC_CTX *ctx, fr_dict_attr_t const *
 				break;
 
 			default:
+				talloc_free(vp);
 				fr_strerror_printf("Failed to find expected value on right hand side in %s", da->name);
-				goto error;
+				goto error_vp;
 			}
 
 			fr_skip_whitespace(p);
@@ -281,10 +298,6 @@ static ssize_t fr_pair_list_afrom_substr(TALLOC_CTX *ctx, fr_dict_attr_t const *
 			 *	@todo - note that they will also be escaped,
 			 *	so we may need to fix that later.
 			 */
-			vp = fr_pair_afrom_da(my_ctx, da);
-			if (!vp) goto error;
-			vp->op = raw.op;
-
 			if ((raw.op == T_OP_REG_EQ) || (raw.op == T_OP_REG_NE)) {
 				fr_pair_value_bstrndup(vp, raw.r_opand, strlen(raw.r_opand), false);
 
@@ -298,19 +311,10 @@ static ssize_t fr_pair_list_afrom_substr(TALLOC_CTX *ctx, fr_dict_attr_t const *
 
 			if (fr_pair_value_from_str(vp, raw.r_opand, strlen(raw.r_opand),
 						   fr_value_unescape_by_quote[quote], false) < 0) {
-				talloc_free(vp);
-				goto error;
+				goto error_vp;
 			}
 			break;
 		}
-
-		/*
-		 *	Free the unknown attribute, we don't need it any more.
-		 */
-		fr_dict_unknown_free(&da);
-
-		fr_assert(vp != NULL);
-		fr_pair_append(my_list, vp);
 
 		/*
 		 *	If there's a relative VP, and it's not the one
