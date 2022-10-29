@@ -3587,6 +3587,95 @@ void fr_pair_list_afrom_box(TALLOC_CTX *ctx, fr_pair_list_t *out, fr_dict_t cons
 	fr_pair_list_tainted(out);
 }
 
+/** Internal merge
+ *
+ *  The internal merge has to re-parent child VPs.  The public one assumes that the outer list
+ *  has all of the VPs parented from the correct location.
+ */
+static void fr_pair_list_merge_internal(TALLOC_CTX *ctx, fr_pair_list_t *dst, fr_pair_list_t *src)
+{
+	fr_pair_t *src_vp, *dst_vp;
+
+	/*
+	 *	Go through each pair in the source list, appending it
+	 *	to the destination list.
+	 */
+	while ((src_vp = fr_pair_list_head(src)) != NULL) {
+		fr_pair_remove(src, src_vp);
+
+		PAIR_VERIFY(src_vp);
+
+		if (!fr_type_is_structural(src_vp->da->type)) {
+		move:
+			(void) talloc_steal(ctx, src_vp);
+			fr_pair_order_list_insert_tail(&dst->order, src_vp);
+			continue;
+		}
+
+		dst_vp = fr_pair_find_by_da(dst, NULL, src_vp->da);
+		if (!dst_vp) goto move;
+
+		fr_pair_list_merge_internal(dst_vp, &dst_vp->vp_group, &src_vp->vp_group);
+
+		/*
+		 *	append() normally moves *all* of the source
+		 *	VPs to the destination list.  The caller then
+		 *	assumes that the src list is empty and can be
+		 *	ignored.  So to avoid memory leaks, we free
+		 *	redundant (structural) src pairs here.w
+		 */
+		talloc_free(src_vp);
+	}
+}
+
+/** Merges a list of fr_pair_t from a temporary list to a destination list
+ *
+ *  This function handles nested pairs, unlike fr_pair_append()
+ *  So it's not "merge with priority", it's "nested append".
+ *
+ * @param dst list to move pairs into
+ * @param src list from which to take pairs
+ */
+void fr_pair_list_merge(fr_pair_list_t *dst, fr_pair_list_t *src)
+{
+	fr_pair_t *src_vp, *dst_vp;
+
+	if (!fr_pair_nested) {
+		fr_pair_list_append(dst, src);
+		return;
+	}
+
+	/*
+	 *	Go through each pair in the source list, appending it
+	 *	to the destination list.
+	 */
+	while ((src_vp = fr_pair_list_head(src)) != NULL) {
+		fr_pair_remove(src, src_vp);
+
+		PAIR_VERIFY(src_vp);
+
+		if (!fr_type_is_structural(src_vp->da->type)) {
+		move:
+			fr_pair_order_list_insert_tail(&dst->order, src_vp);
+			continue;
+		}
+
+		dst_vp = fr_pair_find_by_da(dst, NULL, src_vp->da);
+		if (!dst_vp) goto move;
+
+		fr_pair_list_merge_internal(dst_vp, &dst_vp->vp_group, &src_vp->vp_group);
+
+		/*
+		 *	append() normally moves *all* of the source
+		 *	VPs to the destination list.  The caller then
+		 *	assumes that the src list is empty and can be
+		 *	ignored.  So to avoid memory leaks, we free
+		 *	redundant (structural) src pairs here.w
+		 */
+		talloc_free(src_vp);
+	}
+}
+
 /*
  *	print.c doesn't include pair.h, and doing so causes too many knock-on effects.
  */
