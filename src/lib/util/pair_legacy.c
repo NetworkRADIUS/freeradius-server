@@ -208,7 +208,11 @@ static ssize_t fr_pair_list_afrom_substr(TALLOC_CTX *ctx, fr_dict_attr_t const *
 		/*
 		 *	Create the VP and add it to the list.
 		 */
-		vp = fr_pair_afrom_da(my_ctx, da);
+		if (fr_pair_nested) {
+			if (fr_pair_append_by_da_parent(my_ctx, &vp, my_list, da) < 0) goto error;
+		} else {
+			if (fr_pair_append_by_da(my_ctx, &vp, my_list, da) < 0) goto error;
+		}
 		if (!vp) goto error;
 		vp->op = raw.op;
 
@@ -220,9 +224,6 @@ static ssize_t fr_pair_list_afrom_substr(TALLOC_CTX *ctx, fr_dict_attr_t const *
 		 */
 		fr_dict_unknown_free(&da);
 		da = vp->da;
-
-		fr_assert(vp != NULL);
-		fr_pair_append(my_list, vp);
 
 		/*
 		 *	Allow grouping attributes.
@@ -352,7 +353,7 @@ static ssize_t fr_pair_list_afrom_substr(TALLOC_CTX *ctx, fr_dict_attr_t const *
 		last_token = T_COMMA;
 	}
 
-	if (!fr_pair_list_empty(&tmp_list)) fr_pair_list_append(list, &tmp_list);
+	if (!fr_pair_list_empty(&tmp_list)) fr_pair_list_merge(list, &tmp_list);
 
 	/*
 	 *	And return the last token which we read.
@@ -466,7 +467,7 @@ int fr_pair_list_afrom_file(TALLOC_CTX *ctx, fr_dict_t const *dict, fr_pair_list
 		}
 
 		found = true;
-		fr_pair_list_append(out, &tmp_list);
+		fr_pair_list_merge(out, &tmp_list);
 	}
 
 	*pfiledone = true;

@@ -1,0 +1,16 @@
+# PRE: if
+
+#
+#  User-Name, User-Password, Vendor-Specific, Packet-Type
+#
+if ("%{request[#]}" != 4) {
+	%(debug_attr:&request[*])
+	test_fail
+}
+
+#
+#  a, b, c, d
+#
+if ("%{Vendor-Specific.Cisco.AVPair[#]}" != 4) {
+	test_fail
+}
