@@ -5230,6 +5230,15 @@ ssize_t tmpl_preparse(char const **out, size_t *outlen, char const *in, size_t i
 				continue;
 			}
 
+			/*
+			 *	Allow (...) and {...}
+			 */
+			if ((*p == '{') || (*p == '(')) {
+				p++;
+				depth++;
+				continue;
+			}
+
 			p++;
 		}
 
